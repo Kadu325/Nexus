@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id             String             @id @default(uuid())
+  name           String
+  users          User[]
+  projects       Project[]
+  costCenters    CostCenter[]
+  agriUnits      AgriculturalUnit[]
+  timePolicy     OrgTimePolicy?
+  createdAt      DateTime           @default(now())
+}
+
+model User {
+  id             String       @id @default(uuid())
+  username       String       @unique
+  passwordHash   String
+  role           String       
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  tasks          Task[]
+  timesheets     Timesheet[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime     @default(now())
+}
+
+model Project {
+  id             String             @id @default(uuid())
+  name           String
+  status         String             @default("PLANNING")
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  tasks          Task[]
+  meetings       Meeting[]
+  financials     ProjectFinancials?
+  transactions   Transaction[]
+  createdAt      DateTime           @default(now())
+}
+
+model Task {
+  id             String         @id @default(uuid())
+  title          String
+  status         String         @default("BACKLOG")
+  dueDate        DateTime?
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id])
+  assigneeId     String?
+  assignee       User?          @relation(fields: [assigneeId], references: [id])
+  meetingAction  MeetingAction?
+  timesheets     Timesheet[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model OrgTimePolicy {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  maxDailyHours  Float        @default(8.0)
+  allowOvertime  Boolean      @default(false)
+}
+
+model Timesheet {
+  id          String   @id @default(uuid())
+  date        DateTime
+  hours       Float
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+}
+
+model CostCenter {
+  id             String        @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  transactions   Transaction[]
+}
+
+model Transaction {
+  id             String     @id @default(uuid())
+  type           String
+  flow           String
+  amount         Decimal    @db.Decimal(19, 4)
+  competenceDate DateTime
+  projectId      String
+  project        Project    @relation(fields: [projectId], references: [id])
+  costCenterId   String
+  costCenter     CostCenter @relation(fields: [costCenterId], references: [id])
+  version        Int        @default(1)
+  createdAt      DateTime   @default(now())
+}
+
+model ProjectFinancials {
+  id             String   @id @default(uuid())
+  projectId      String   @unique
+  project        Project  @relation(fields: [projectId], references: [id])
+  budget         Decimal  @db.Decimal(19, 4)
+  plannedValue   Decimal  @db.Decimal(19, 4)
+  earnedValue    Decimal  @db.Decimal(19, 4)
+  actualCost     Decimal  @db.Decimal(19, 4)
+  updatedAt      DateTime @updatedAt
+}
+
+model Meeting {
+  id        String          @id @default(uuid())
+  title     String
+  date      DateTime
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id])
+  minutes   MeetingMinute[]
+}
+
+model MeetingMinute {
+  id        String          @id @default(uuid())
+  content   String          @db.Text
+  status    String          @default("DRAFT")
+  meetingId String
+  meeting   Meeting         @relation(fields: [meetingId], references: [id])
+  actions   MeetingAction[]
+}
+
+model MeetingAction {
+  id             String        @id @default(uuid())
+  description    String
+  rawAssignee    String?
+  resolvedUserId String?
+  status         String        @default("PENDING")
+  minuteId       String
+  minute         MeetingMinute @relation(fields: [minuteId], references: [id])
+  taskId         String?       @unique
+  task           Task?         @relation(fields: [taskId], references: [id])
+}
+
+model AgriculturalUnit {
+  id             String          @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  indicators     AgroIndicator[]
+}
+
+model AgroIndicator {
+  id                 String           @id @default(uuid())
+  name               String
+  formula            String
+  unit               String
+  source             String
+  frequency          String
+  value              Decimal          @db.Decimal(10, 2)
+  readingDate        DateTime
+  agriculturalUnitId String
+  agriculturalUnit   AgriculturalUnit @relation(fields: [agriculturalUnitId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  details   Json
+  createdAt DateTime @default(now())
+}
