@@ -10,7 +10,7 @@ export default function PMODashboard() {
 
   useEffect(() => {
     const orgId = (typeof window !== 'undefined' ? sessionStorage.getItem('orgId') : '') || '';
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/financial/projects/${projectId}/indicators`, {
+    fetch(`/api/financial/projects/${projectId}/indicators`, {
       headers: { 'x-org-id': orgId },
     })
       .then(res => {

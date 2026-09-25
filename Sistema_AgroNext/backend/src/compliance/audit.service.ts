@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class AuditService {
@@ -9,15 +9,15 @@ export class AuditService {
    * Registra eventos na trilha de auditoria. Aceita transação opcional[cite: 2].
    */
   async logAction(
-    prismaClient: any, 
+    prismaClient: any,
     data: {
-      action: 'CREATE' | 'UPDATE' | 'DELETE' | 'EXPORT' | 'LOGIN';
+      action: "CREATE" | "UPDATE" | "DELETE" | "EXPORT" | "LOGIN";
       entity: string;
       entityId?: string;
       userId: string;
       details: any;
       ipAddress?: string;
-    }
+    },
   ) {
     const client = prismaClient || this.defaultPrisma;
     return client.auditLog.create({
@@ -28,7 +28,7 @@ export class AuditService {
         userId: data.userId,
         details: data.details,
         ipAddress: data.ipAddress,
-      }
+      },
     });
   }
 
@@ -37,10 +37,10 @@ export class AuditService {
       where: {
         entity,
         entityId,
-        user: { organizationId: orgId } // Garante isolamento de tenant[cite: 2]
+        user: { organizationId: orgId }, // Garante isolamento de tenant[cite: 2]
       },
-      orderBy: { createdAt: 'desc' },
-      include: { user: { select: { username: true } } }
+      orderBy: { createdAt: "desc" },
+      include: { user: { select: { username: true } } },
     });
   }
 }

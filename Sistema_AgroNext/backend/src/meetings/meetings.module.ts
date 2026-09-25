@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
-import { MeetingsController } from './meetings.controller';
-import { MeetingsService } from './meetings.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { ComplianceModule } from '../compliance/compliance.module';
+import { Module } from "@nestjs/common";
+import { MeetingsController } from "./meetings.controller";
+import { MeetingsService } from "./meetings.service";
+import { PrismaService } from "../prisma/prisma.service";
+import { ComplianceModule } from "../compliance/compliance.module";
 
 @Module({
   imports: [ComplianceModule], // Importa auditoria para registrar automações

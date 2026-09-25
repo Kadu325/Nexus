@@ -13,7 +13,7 @@ export default function KanbanBoard() {
 
   useEffect(() => {
     const orgId = (typeof window !== 'undefined' ? sessionStorage.getItem('orgId') : '') || '';
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${projectId}/tasks`, {
+    fetch(`/api/projects/${projectId}/tasks`, {
       headers: { 'x-org-id': orgId },
     })
       .then(res => res.json())

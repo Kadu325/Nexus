@@ -24,7 +24,7 @@ export default function MeetingActionsReview() {
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/meetings/actions/${actionId}/authorize`,
+        `/api/meetings/actions/${actionId}/authorize`,
         {
           method: 'POST',
           headers: {

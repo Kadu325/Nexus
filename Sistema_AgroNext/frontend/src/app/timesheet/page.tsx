@@ -17,7 +17,7 @@ export default function TimesheetEntry() {
     const userId = (typeof window !== 'undefined' ? sessionStorage.getItem('userId') : '') || '';
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/timesheets`, {
+      const res = await fetch('/api/timesheets', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

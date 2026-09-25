@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -18,7 +17,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -42,9 +41,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#F5F7FA]">
       <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-lg">
         <div className="flex flex-col items-center mb-8">
-          <div className="relative w-48 h-16 mb-2">
-            <Image src="/FPNexusV2(2).jpeg" alt="Logo FPNexus" fill style={{ objectFit: 'contain' }} priority />
-          </div>
+          <div className="text-3xl font-bold text-[#1B5E20] mb-2" aria-label="FPNexus">FPNexus</div>
           <p className="text-sm font-medium text-[#1B5E20]">Dados conectados. Decisões inteligentes.</p>
         </div>
 

@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { AuditService } from './audit.service';
-import { ComplianceController } from './compliance.controller';
-import { PrismaService } from '../prisma/prisma.service';
+import { Module } from "@nestjs/common";
+import { AuditService } from "./audit.service";
+import { ComplianceController } from "./compliance.controller";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Module({
   controllers: [ComplianceController],

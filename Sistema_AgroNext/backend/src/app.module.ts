@@ -1,12 +1,13 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from './prisma/prisma.service';
-import { AuthModule } from './auth/auth.module';
-import { TasksModule } from './tasks/tasks.module';
-import { FinancialModule } from './financial/financial.module';
-import { MeetingsModule } from './meetings/meetings.module';
-import { ComplianceModule } from './compliance/compliance.module';
-import { AgroModule } from './agro/agro.module';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { PrismaService } from "./prisma/prisma.service";
+import { AuthModule } from "./auth/auth.module";
+import { TasksModule } from "./tasks/tasks.module";
+import { FinancialModule } from "./financial/financial.module";
+import { MeetingsModule } from "./meetings/meetings.module";
+import { ComplianceModule } from "./compliance/compliance.module";
+import { AgroModule } from "./agro/agro.module";
+import { HealthController } from "./health.controller";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AgroModule } from './agro/agro.module';
     MeetingsModule,
     AgroModule,
   ],
+  controllers: [HealthController],
   providers: [PrismaService],
   exports: [PrismaService],
 })

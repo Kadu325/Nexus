@@ -8,14 +8,14 @@ datasource db {
 }
 
 model Organization {
-  id             String             @id @default(uuid())
-  name           String
-  users          User[]
-  projects       Project[]
-  costCenters    CostCenter[]
-  agriUnits      AgriculturalUnit[]
-  timePolicy     OrgTimePolicy?
-  createdAt      DateTime           @default(now())
+  id          String             @id @default(uuid())
+  name        String
+  users       User[]
+  projects    Project[]
+  costCenters CostCenter[]
+  agriUnits   AgriculturalUnit[]
+  timePolicy  OrgTimePolicy?
+  createdAt   DateTime           @default(now())
 }
 
 model User {
