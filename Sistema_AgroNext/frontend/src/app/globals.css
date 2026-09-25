@@ -1,14 +1,50 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-* {
-  box-sizing: border-box;
+/*
+ * Identidade FPNexus (sistema.md, Paleta e Regras de uso):
+ * #4CAF50 só em superfícies e elementos não textuais (contraste 2,78:1);
+ * texto e botões primários em #1B5E20; links e informação em #1565C0.
+ */
+@theme {
+  --color-agro: #4caf50;
+  --color-agro-50: #edf7ee;
+  --color-agro-100: #d4ecd5;
+  --color-agro-dark: #1b5e20;
+  --color-agro-darker: #144618;
+  --color-tech: #1565c0;
+  --color-tech-50: #e8f0fb;
+  --color-petrol: #0a8398;
+  --color-petrol-text: #08798c;
+  --color-surface: #f5f7fa;
+  --color-ink: #1d2939;
+  --color-muted: #475467;
+  --color-subtle: #667085;
+  --color-line: #e4e7ec;
+  --color-success: #2e7d32;
+  --color-success-50: #e8f5e9;
+  --color-warning: #8a5300;
+  --color-warning-icon: #b26a00;
+  --color-warning-50: #fff4e0;
+  --color-danger: #c62828;
+  --color-danger-50: #fdecea;
+  --font-sans: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --radius-card: 0.75rem;
 }
 
 html,
 body {
-  padding: 0;
-  margin: 0;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-tech);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
