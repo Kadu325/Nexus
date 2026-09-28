@@ -1,0 +1,89 @@
+# FPNexus — instalação inicial (VPS Linux com Docker Compose)
+# Serviços: proxy (Caddy, HTTPS automático) → frontend (Next.js) e backend (NestJS) → db (PostgreSQL)
+# Redis e workers ficam fora desta etapa: nenhum módulo entregue exige processamento assíncrono ainda.
+
+name: fpnexus
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fpnexus}
+      POSTGRES_USER: ${POSTGRES_USER:-fpnexus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # sem porta publicada: o banco só é acessível pela rede interna do Compose
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEMORY_LIMIT:-1g}
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      # arquivo reservado com ADMIN_INITIAL_USERNAME e ADMIN_INITIAL_PASSWORD (fora do repositório);
+      # pode ser removido após o primeiro provisionamento
+      - path: ./FPNexus_acesso_inicial.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fpnexus}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fpnexus}?schema=public
+      ORG_INITIAL_NAME: ${ORG_INITIAL_NAME:-Organização Inicial}
+      ORG_INITIAL_SLUG: ${ORG_INITIAL_SLUG:-organizacao-inicial}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-120}
+      PASSWORD_MIN_LENGTH: ${PASSWORD_MIN_LENGTH:-12}
+      API_DOCS: ${API_DOCS:-true}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+    deploy:
+      resources:
+        limits:
+          memory: ${API_MEMORY_LIMIT:-768m}
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      API_INTERNAL_URL: http://backend:3001
+    deploy:
+      resources:
+        limits:
+          memory: ${WEB_MEMORY_LIMIT:-512m}
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

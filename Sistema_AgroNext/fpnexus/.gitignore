@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+.env
+.env.*
+!.env.example
+FPNexus_acesso_inicial.env
+backups/
+*.log

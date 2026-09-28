@@ -1,0 +1,952 @@
+// FPNexus — modelo de dados (PostgreSQL)
+// Toda tabela de negócio possui orgId: o isolamento entre organizações é aplicado
+// em todas as consultas pelo backend (ver src/common/org-scope.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Fundação ─────────────────────────────
+
+enum Role {
+  ADMIN
+  PMO
+  GERENTE
+  MEMBRO
+  LEITOR
+}
+
+model Organization {
+  id                  String    @id @default(uuid())
+  name                String
+  slug                String    @unique
+  timezone            String    @default("America/Sao_Paulo")
+  currency            String    @default("BRL")
+  locale              String    @default("pt-BR")
+  riskAppetite        Int       @default(9)
+  aiDailyLimit        Int       @default(100)
+  timesheetLockedUntil DateTime? @db.Date
+  createdAt           DateTime  @default(now())
+
+  memberships Membership[]
+}
+
+model User {
+  id                String    @id @default(uuid())
+  username          String    @unique // sempre em minúsculas
+  name              String
+  email             String?
+  passwordHash      String? // null = pessoa cadastrada sem acesso ao sistema
+  active            Boolean   @default(true)
+  passwordChangedAt DateTime?
+  createdAt         DateTime  @default(now())
+
+  memberships Membership[]
+  sessions    Session[]
+}
+
+model Membership {
+  id        String   @id @default(uuid())
+  userId    String
+  orgId     String
+  role      Role
+  createdAt DateTime @default(now())
+
+  user User         @relation(fields: [userId], references: [id])
+  org  Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+model Session {
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique
+  userId     String
+  orgId      String
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+  ip         String?
+  userAgent  String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  orgId     String?
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  summary   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  orgId     String
+  userId    String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([orgId, userId, readAt])
+}
+
+// ─────────────────────── Gestão de Projetos (P1/P7) ───────────────────────
+
+enum ProjectType {
+  ESTRATEGICO
+  OPERACIONAL
+}
+
+enum ProjectStatus {
+  PLANEJAMENTO
+  EM_ANDAMENTO
+  PAUSADO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum TaskStatus {
+  A_FAZER
+  EM_ANDAMENTO
+  EM_REVISAO
+  CONCLUIDA
+}
+
+enum Priority {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+model Portfolio {
+  id          String   @id @default(uuid())
+  orgId       String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  programs Program[]
+  projects Project[]
+
+  @@index([orgId])
+}
+
+model Program {
+  id          String   @id @default(uuid())
+  orgId       String
+  portfolioId String?
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  portfolio Portfolio? @relation(fields: [portfolioId], references: [id])
+  projects  Project[]
+
+  @@index([orgId])
+}
+
+model Project {
+  id                         String        @id @default(uuid())
+  orgId                      String
+  code                       String
+  name                       String
+  description                String?
+  type                       ProjectType   @default(OPERACIONAL)
+  status                     ProjectStatus @default(PLANEJAMENTO)
+  portfolioId                String?
+  programId                  String?
+  parentId                   String?
+  managerId                  String?
+  costCenterId               String?
+  unitId                     String?
+  startDate                  DateTime?     @db.Date
+  endDate                    DateTime?     @db.Date
+  priorityScore              Int?
+  wipLimits                  Json          @default("{}")
+  autoCreateTasksFromActions Boolean       @default(false)
+  isDemo                     Boolean       @default(false)
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+
+  portfolio Portfolio? @relation(fields: [portfolioId], references: [id])
+  program   Program?   @relation(fields: [programId], references: [id])
+  parent    Project?   @relation("Subprojects", fields: [parentId], references: [id])
+  children  Project[]  @relation("Subprojects")
+  tasks     Task[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  orgId          String
+  projectId      String
+  parentId       String?
+  wbsCode        String?
+  title          String
+  description    String?
+  status         TaskStatus @default(A_FAZER)
+  priority       Priority   @default(MEDIA)
+  assigneeId     String?
+  startDate      DateTime?  @db.Date
+  endDate        DateTime?  @db.Date
+  isMilestone    Boolean    @default(false)
+  progress       Int        @default(0)
+  budget         Decimal    @default(0) @db.Decimal(18, 2)
+  estOptimistic  Float?
+  estLikely      Float?
+  estPessimistic Float?
+  tags           String[]   @default([])
+  completedAt    DateTime?
+  sourceActionId String?    @unique
+  createdById    String?
+  version        Int        @default(1)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id])
+  parent   Task?   @relation("Subtasks", fields: [parentId], references: [id])
+  children Task[]  @relation("Subtasks")
+
+  @@index([orgId, projectId])
+  @@index([orgId, assigneeId])
+}
+
+model TaskDependency {
+  id            String @id @default(uuid())
+  orgId         String
+  predecessorId String
+  successorId   String
+
+  @@unique([predecessorId, successorId])
+  @@index([orgId])
+}
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  orgId     String
+  taskId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([orgId, taskId])
+}
+
+model ProgressLog {
+  id         String   @id @default(uuid())
+  orgId      String
+  taskId     String
+  progress   Int
+  recordedAt DateTime @default(now())
+
+  @@index([orgId, taskId, recordedAt])
+}
+
+model Baseline {
+  id          String   @id @default(uuid())
+  orgId       String
+  projectId   String
+  number      Int
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  items BaselineTask[]
+
+  @@unique([projectId, number])
+  @@index([orgId])
+}
+
+model BaselineTask {
+  id         String    @id @default(uuid())
+  baselineId String
+  taskId     String
+  startDate  DateTime? @db.Date
+  endDate    DateTime? @db.Date
+  budget     Decimal   @db.Decimal(18, 2)
+
+  baseline Baseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+
+  @@index([baselineId])
+}
+
+// ─────────────────────────── PMO Corporativo (P2/P5) ───────────────────────────
+
+enum ApprovalState {
+  RASCUNHO
+  EM_APROVACAO
+  APROVADO
+  REJEITADO
+}
+
+model Charter {
+  id               String        @id @default(uuid())
+  orgId            String
+  projectId        String        @unique
+  objectives       String?
+  scope            String?
+  assumptions      String?
+  constraints      String?
+  sponsor          String?
+  stakeholdersText String?
+  budget           Decimal?      @db.Decimal(18, 2)
+  macroSchedule    String?
+  status           ApprovalState @default(RASCUNHO)
+  version          Int           @default(1)
+  updatedAt        DateTime      @updatedAt
+
+  @@index([orgId])
+}
+
+model BusinessCase {
+  id            String        @id @default(uuid())
+  orgId         String
+  projectId     String        @unique
+  justification String?
+  feasibility   String?
+  benefitsText  String?
+  status        ApprovalState @default(RASCUNHO)
+  updatedAt     DateTime      @updatedAt
+
+  lines BusinessCaseLine[]
+
+  @@index([orgId])
+}
+
+enum CaseLineKind {
+  BENEFICIO
+  CUSTO
+}
+
+model BusinessCaseLine {
+  id             String       @id @default(uuid())
+  orgId          String
+  businessCaseId String
+  period         Int // mês relativo (1 = primeiro mês do horizonte)
+  kind           CaseLineKind
+  category       String?
+  description    String
+  amount         Decimal      @db.Decimal(18, 2)
+
+  businessCase BusinessCase @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, businessCaseId])
+}
+
+enum ApprovalEntity {
+  TAP
+  BUSINESS_CASE
+  DOCUMENTO
+  MUDANCA
+}
+
+enum ApprovalDecision {
+  PENDENTE
+  APROVADO
+  REJEITADO
+  CANCELADO
+}
+
+model ApprovalRequest {
+  id            String           @id @default(uuid())
+  orgId         String
+  entityType    ApprovalEntity
+  entityId      String
+  title         String
+  requestedById String
+  status        ApprovalDecision @default(PENDENTE)
+  decidedById   String?
+  decidedAt     DateTime?
+  comment       String?
+  createdAt     DateTime         @default(now())
+
+  @@index([orgId, status])
+}
+
+model Stakeholder {
+  id           String   @id @default(uuid())
+  orgId        String
+  projectId    String
+  name         String
+  organization String?
+  role         String?
+  contact      String?
+  power        Int
+  interest     Int
+  attitude     String?
+  strategy     String?
+  userId       String?
+  createdAt    DateTime @default(now())
+
+  @@index([orgId, projectId])
+}
+
+enum RiskStatus {
+  ABERTO
+  MITIGANDO
+  OCORRIDO
+  FECHADO
+}
+
+model Risk {
+  id          String     @id @default(uuid())
+  orgId       String
+  projectId   String
+  title       String
+  description String?
+  category    String?
+  probability Int
+  impact      Int
+  response    String?
+  ownerId     String?
+  status      RiskStatus @default(ABERTO)
+  contingency Decimal?   @db.Decimal(18, 2)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([orgId, projectId])
+}
+
+enum ContractStatus {
+  EM_NEGOCIACAO
+  VIGENTE
+  ENCERRADO
+  CANCELADO
+}
+
+model Contract {
+  id           String         @id @default(uuid())
+  orgId        String
+  projectId    String?
+  costCenterId String?
+  supplier     String
+  object       String
+  totalValue   Decimal        @db.Decimal(18, 2)
+  startDate    DateTime       @db.Date
+  endDate      DateTime       @db.Date
+  status       ContractStatus @default(EM_NEGOCIACAO)
+  ownerId      String?
+  createdAt    DateTime       @default(now())
+
+  @@index([orgId])
+}
+
+enum MeetingType {
+  REUNIAO
+  COMITE
+  KICKOFF
+  STATUS_REPORT
+  ENCERRAMENTO
+}
+
+model Meeting {
+  id          String      @id @default(uuid())
+  orgId       String
+  projectId   String
+  title       String
+  type        MeetingType @default(REUNIAO)
+  scheduledAt DateTime
+  location    String?
+  notes       String?
+  createdById String?
+  createdAt   DateTime    @default(now())
+
+  decisions MeetingDecision[]
+  actions   MeetingAction[]
+
+  @@index([orgId, projectId])
+}
+
+model MeetingDecision {
+  id          String   @id @default(uuid())
+  orgId       String
+  meetingId   String
+  description String
+  createdAt   DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, meetingId])
+}
+
+enum ActionStatus {
+  EM_REVISAO
+  VALIDADA
+  CONVERTIDA
+  CONCLUIDA
+  DESCARTADA
+}
+
+model MeetingAction {
+  id               String       @id @default(uuid())
+  orgId            String
+  meetingId        String
+  fingerprint      String
+  description      String
+  rawText          String?
+  assigneeId       String?
+  candidateIds     String[]     @default([])
+  dueDate          DateTime?    @db.Date
+  dueDateRaw       String?
+  suggestedDueDate DateTime?    @db.Date
+  issues           String[]     @default([])
+  status           ActionStatus @default(EM_REVISAO)
+  taskId           String?      @unique
+  completedAt      DateTime?
+  completedById    String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, fingerprint])
+  @@index([orgId, status])
+}
+
+enum DocumentType {
+  ATA
+  POP
+  PROCEDIMENTO
+  POLITICA
+  WIKI
+  LICAO_APRENDIDA
+  RELATORIO
+}
+
+model Document {
+  id        String       @id @default(uuid())
+  orgId     String
+  projectId String?
+  meetingId String?
+  type      DocumentType
+  title     String
+  createdAt DateTime     @default(now())
+
+  versions DocumentVersion[]
+
+  @@index([orgId, projectId])
+  @@index([orgId, meetingId])
+}
+
+model DocumentVersion {
+  id           String        @id @default(uuid())
+  orgId        String
+  documentId   String
+  version      Int
+  content      String
+  status       ApprovalState @default(RASCUNHO)
+  aiGenerated  Boolean       @default(false)
+  createdById  String?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([orgId])
+}
+
+// ─────────────────────────── Gestão Financeira (P4) ───────────────────────────
+
+enum EntryNature {
+  RECEITA
+  DESPESA
+}
+
+enum ExpenseType {
+  CAPEX
+  OPEX
+}
+
+enum EntryStatus {
+  PREVISTO
+  REALIZADO
+}
+
+enum EntrySource {
+  MANUAL
+  ERP
+  IMPORTACAO
+}
+
+enum CostCategory {
+  RECURSOS
+  EQUIPAMENTOS
+  FORNECEDORES
+  SERVICOS
+  MATERIAIS
+  OUTROS
+}
+
+model CostCenter {
+  id        String   @id @default(uuid())
+  orgId     String
+  code      String
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([orgId, code])
+}
+
+model FinancialEntry {
+  id             String       @id @default(uuid())
+  orgId          String
+  projectId      String?
+  costCenterId   String?
+  contractId     String?
+  nature         EntryNature
+  expenseType    ExpenseType?
+  category       CostCategory @default(OUTROS)
+  description    String
+  amount         Decimal      @db.Decimal(18, 2)
+  competenceDate DateTime     @db.Date
+  cashDate       DateTime?    @db.Date
+  status         EntryStatus  @default(PREVISTO)
+  source         EntrySource  @default(MANUAL)
+  externalId     String?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+
+  @@index([orgId, projectId])
+  @@index([orgId, competenceDate])
+}
+
+// ─────────────────────────── Gestão de Recursos (P3) ───────────────────────────
+
+enum ResourceType {
+  PESSOA
+  EQUIPAMENTO
+  MAQUINA
+  VEICULO
+  CONSULTOR
+}
+
+model Resource {
+  id                  String       @id @default(uuid())
+  orgId               String
+  name                String
+  type                ResourceType
+  userId              String?
+  weeklyCapacityHours Decimal?     @db.Decimal(6, 2)
+  costPerHour         Decimal?     @db.Decimal(18, 2)
+  skills              String[]     @default([])
+  certifications      String[]     @default([])
+  active              Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+
+  @@index([orgId])
+}
+
+model Allocation {
+  id           String   @id @default(uuid())
+  orgId        String
+  resourceId   String
+  projectId    String
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  hoursPerWeek Decimal  @db.Decimal(6, 2)
+  createdAt    DateTime @default(now())
+
+  @@index([orgId, resourceId])
+}
+
+enum TimeEntryStatus {
+  RASCUNHO
+  SUBMETIDO
+  APROVADO
+  REJEITADO
+}
+
+model TimeEntry {
+  id           String          @id @default(uuid())
+  orgId        String
+  userId       String
+  projectId    String
+  taskId       String?
+  date         DateTime        @db.Date
+  hours        Decimal         @db.Decimal(5, 2)
+  description  String?
+  status       TimeEntryStatus @default(RASCUNHO)
+  decidedById  String?
+  decidedAt    DateTime?
+  rejectReason String?
+  createdAt    DateTime        @default(now())
+
+  @@index([orgId, userId, date])
+}
+
+// ─────────────────────────── Governança de TI (P6) ───────────────────────────
+
+enum Criticality {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum Lifecycle {
+  EM_AVALIACAO
+  EM_PRODUCAO
+  EM_DESCONTINUACAO
+  DESCONTINUADO
+}
+
+model ItSystem {
+  id           String      @id @default(uuid())
+  orgId        String
+  name         String
+  vendor       String?
+  ownerId      String?
+  criticality  Criticality @default(MEDIA)
+  lifecycle    Lifecycle   @default(EM_PRODUCAO)
+  endOfSupport DateTime?   @db.Date
+  notes        String?
+  createdAt    DateTime    @default(now())
+
+  @@index([orgId])
+}
+
+model ChangeRequest {
+  id            String        @id @default(uuid())
+  orgId         String
+  systemId      String?
+  projectId     String?
+  title         String
+  justification String?
+  risk          Criticality   @default(MEDIA)
+  plannedStart  DateTime?
+  plannedEnd    DateTime?
+  rollbackPlan  String?
+  status        ApprovalState @default(RASCUNHO)
+  implementedAt DateTime?
+  requestedById String?
+  createdAt     DateTime      @default(now())
+
+  @@index([orgId])
+}
+
+// ─────────────────────────── Compliance Tecnológico (P6) ───────────────────────────
+
+enum ControlFrequency {
+  MENSAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
+enum AssessmentResult {
+  CONFORME
+  PARCIAL
+  NAO_CONFORME
+  NAO_AVALIADO
+}
+
+model Framework {
+  id        String   @id @default(uuid())
+  orgId     String
+  name      String
+  version   String?
+  createdAt DateTime @default(now())
+
+  controls Control[]
+
+  @@index([orgId])
+}
+
+model Control {
+  id             String           @id @default(uuid())
+  orgId          String
+  frameworkId    String
+  code           String
+  title          String
+  description    String?
+  requirementRef String?
+  ownerId        String?
+  frequency      ControlFrequency @default(ANUAL)
+  lastResult     AssessmentResult @default(NAO_AVALIADO)
+  lastAssessedAt DateTime?
+  createdAt      DateTime         @default(now())
+
+  framework Framework @relation(fields: [frameworkId], references: [id])
+
+  @@unique([orgId, frameworkId, code])
+}
+
+model Evidence {
+  id             String   @id @default(uuid())
+  orgId          String
+  controlId      String
+  description    String
+  reference      String?
+  collectedAt    DateTime @db.Date
+  supersededById String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@index([orgId, controlId])
+}
+
+model Assessment {
+  id           String           @id @default(uuid())
+  orgId        String
+  controlId    String
+  result       AssessmentResult
+  notes        String?
+  assessedById String?
+  assessedAt   DateTime         @default(now())
+
+  @@index([orgId, controlId])
+}
+
+enum NcStatus {
+  ABERTA
+  EM_TRATAMENTO
+  ENCERRADA
+}
+
+enum NcSource {
+  COMPLIANCE
+  QUALIDADE
+  AUDITORIA
+}
+
+model NonConformity {
+  id          String    @id @default(uuid())
+  orgId       String
+  controlId   String?
+  projectId   String?
+  source      NcSource  @default(COMPLIANCE)
+  title       String
+  description String?
+  actionPlan  String?
+  ownerId     String?
+  dueDate     DateTime? @db.Date
+  status      NcStatus  @default(ABERTA)
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([orgId, status])
+}
+
+// ─────────────────────────── Agronegócio ───────────────────────────
+
+enum UnitType {
+  FAZENDA
+  FILIAL
+  ARMAZEM
+  ESCRITORIO
+}
+
+enum MeasurementOrigin {
+  MANUAL
+  INTEGRACAO
+  SENSOR
+}
+
+model Unit {
+  id           String   @id @default(uuid())
+  orgId        String
+  name         String
+  type         UnitType @default(FAZENDA)
+  city         String?
+  state        String?
+  latitude     Decimal? @db.Decimal(9, 6)
+  longitude    Decimal? @db.Decimal(9, 6)
+  areaHa       Decimal? @db.Decimal(12, 2)
+  costCenterId String?
+  isDemo       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([orgId])
+}
+
+model Season {
+  id        String   @id @default(uuid())
+  orgId     String
+  name      String
+  crop      String?
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+
+  @@unique([orgId, name])
+}
+
+model AgroIndicator {
+  id          String   @id @default(uuid())
+  orgId       String
+  name        String
+  formula     String
+  unit        String
+  source      String
+  frequency   String
+  responsible String?
+  createdAt   DateTime @default(now())
+
+  @@unique([orgId, name])
+}
+
+model AgroMeasurement {
+  id          String            @id @default(uuid())
+  orgId       String
+  indicatorId String
+  unitId      String
+  seasonId    String?
+  projectId   String?
+  refDate     DateTime          @db.Date
+  value       Decimal           @db.Decimal(18, 4)
+  origin      MeasurementOrigin @default(MANUAL)
+  createdById String?
+  createdAt   DateTime          @default(now())
+
+  @@index([orgId, indicatorId, refDate])
+}
+
+// ─────────────────────────── Inteligência Artificial (P8) ───────────────────────────
+
+model AiUsageLog {
+  id               String   @id @default(uuid())
+  orgId            String
+  userId           String
+  feature          String
+  provider         String
+  status           String
+  promptTokens     Int?
+  completionTokens Int?
+  createdAt        DateTime @default(now())
+
+  @@index([orgId, createdAt])
+}
+
+model Simulation {
+  id          String   @id @default(uuid())
+  orgId       String
+  projectId   String
+  method      String
+  params      Json
+  result      Json
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([orgId, projectId])
+}

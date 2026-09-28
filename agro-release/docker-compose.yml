@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: agro-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+  frontend:
+    image: meudockerhub/agro-frontend:latest
+    container_name: agro-frontend
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3001
+      - PORT=3000
+    depends_on:
+      - backend
+
+  backend:
+    image: meudockerhub/agro-backend:latest
+    container_name: agro-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/agro
+      - JWT_SECRET=sua-chave-secreta-aqui
+      - PORT=3001
+      - HOST=0.0.0.0
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:15-alpine
+    container_name: agro-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=agro
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

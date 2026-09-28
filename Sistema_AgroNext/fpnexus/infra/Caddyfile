@@ -1,0 +1,26 @@
+# Proxy reverso do FPNexus. Com SITE_ADDRESS = um domínio (ex.: fpnexus.exemplo.com.br),
+# o Caddy obtém e renova o certificado HTTPS automaticamente (Let's Encrypt).
+# Com SITE_ADDRESS=http://localhost, serve HTTP local sem certificado.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	request_body {
+		max_size 10MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	# mesma origem: /api vai para o NestJS; o restante para o Next.js
+	handle /api/* {
+		reverse_proxy backend:3001
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+	log {
+		output stdout
+		format json
+	}
+}
